@@ -180,25 +180,15 @@ def prepare_features(demand_df: pd.DataFrame, df_rides: pd.DataFrame) -> pd.Data
 
 # ── Subsampling ───────────────────────────────────────────────────────────────
 
-def subsample_for_tree(demand_df: pd.DataFrame, n_cap: int, seed: int = 42) -> pd.DataFrame:
+def subsample_for_tree(demand_df: pd.DataFrame, n_cap: int) -> pd.DataFrame:
     """
-    Keep up to n_cap/2 nonzero rows and n_cap/2 zero rows (50/50 split).
-    The 50/50 split prevents the tree from collapsing to 'always predict 0'
-    while keeping zero-demand rows represented (they account for ~55% of the
-    eval set). Scale n_cap up once the pipeline is verified.
+    Take the most recent n_cap rows by hour_ts.
+    Recent demand is closest to the validation period and preserves the natural
+    zero/nonzero ratio rather than forcing an artificial 50/50 balance.
     """
-    nonzero = demand_df[demand_df["demand"] > 0]
-    zeros   = demand_df[demand_df["demand"] == 0]
-
-    n_nonzero = min(len(nonzero), n_cap // 2)
-    n_zeros   = min(len(zeros),   n_cap - n_nonzero)
-
-    sample_nz = nonzero.sample(n=n_nonzero, random_state=seed)
-    sample_z  = zeros.sample(  n=n_zeros,   random_state=seed)
-
     return (
-        pd.concat([sample_nz, sample_z])
-        .sample(frac=1, random_state=seed)
+        demand_df.sort_values("hour_ts")
+        .tail(n_cap)
         .reset_index(drop=True)
     )
 
@@ -303,7 +293,7 @@ def main() -> None:
     demand_df["stat_baseline_pred"] = apply_stat_baseline(demand_df, stat_tables)
 
     # ── 7. Subsample for tree training ───────────────────────────────────────
-    print(f"\n[6] Subsampling for tree (cap={N_ROWS_CAP:,}, 50/50 nonzero/zero)...")
+    print(f"\n[6] Subsampling for tree (most recent {N_ROWS_CAP:,} rows by hour_ts)...")
     df_tree = subsample_for_tree(demand_df, N_ROWS_CAP)
     tz = (df_tree["demand"] == 0).sum()
     tnz = (df_tree["demand"] > 0).sum()
