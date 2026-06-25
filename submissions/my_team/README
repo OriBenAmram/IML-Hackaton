@@ -1,0 +1,27 @@
+Omer Sasson
+000000000
+
+## Model Architecture
+
+LightGBM gradient boosted trees for station-hour bike demand prediction.
+
+### Features
+- **Temporal:** hour, weekday, month, day_of_month, cyclical sin/cos encodings, rush hour/night/midday flags
+- **Weather:** temperature, humidity, precipitation, rain, snowfall, cloud cover, wind speed, derived binary flags
+- **Station metadata:** lat/lng, bike lanes, parks, POIs, transit stops, distance to rail/center
+- **Interactions:** office×rush_hour, university×workday, park×weekend×temp, restaurant×evening, transit×rush
+- **Historical aggregates:** station mean/median/std demand, station-hour mean, station-weekday-hour mean, city-hour mean
+
+### Training
+1. Temporal 80/20 split on dates
+2. Aggregate rides to station-hour demand counts
+3. Add zero-demand rows for all active station-hours
+4. Compute historical statistics as lookup tables
+5. Train LightGBM with MAE objective
+
+### Reproducing
+```
+cd submissions/my_team
+python train.py
+```
+Requires: pandas, numpy, lightgbm, joblib
