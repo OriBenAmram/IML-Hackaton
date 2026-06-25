@@ -43,7 +43,7 @@ OUTPUT      = Path("weights.joblib")
 # ── Cap on tree training rows ─────────────────────────────────────────────────
 # Half will be nonzero-demand rows, half will be zero-demand rows.
 # Bump up to 300_000 or 600_000 once the pipeline looks correct.
-N_ROWS_CAP = 100_000
+N_ROWS_CAP = 300_000
 
 # ── Column groups ─────────────────────────────────────────────────────────────
 STATION_META_COLS = [
