@@ -1,29 +1,31 @@
-# Bike Demand Forecasting — Team Decisions
+# Bike Demand Forecasting — Decisions
 
-**Challenge:** Predict hourly bike demand per station for city1, city2 (main), city3/city4 (generalization).
 **Metric:** MAE (lower is better). Negatives clipped to 0.
-**Target:** `y_{s,d,h}` = # rides starting from station `s` during hour `h` on date `d`.
 
----
+## Architecture
+- **Stat baseline**: 7-level hierarchical mean lookup (city+station+hour+weekday → global mean). Fallback chain handles unseen cities (city4).
+- **Tree**: CatBoostRegressor, loss=MAE, 500 iterations, depth=6, l2_leaf_reg=10. City and station_id as native cat_features.
+- **Features**: sin/cos cyclical encoding for hour and weekday. `stat_baseline_pred` as a tree input feature.
+- **Blend**: final = α·tree + (1-α)·stat_baseline, α tuned on validation set.
+- **Training subset**: chronological — most recent N rows from demand grid (natural zero/nonzero ratio).
 
-## Model Architecture
-- **Hierarchical stat baseline**: 7-level fallback lookup (city+station+hour+weekday → global mean), stored as plain dicts for O(1) inference. Degrades gracefully for unseen cities (city4).
-- **Tree model**: CatBoostRegressor (loss=MAE, 500 iterations, depth=6), trained on station-hour demand grid including explicit zero-demand rows. City and station_id as native cat_features.
-- **Features**: Cyclical sin/cos for hour (period=24) and weekday (period=7). `stat_baseline_pred` as a tree feature — tree refines the statistical prior.
-- **Alpha blend**: final = α * tree + (1-α) * stat_baseline, α tuned on local validation set.
-- **Training subset**: Chronological — most recent N_ROWS_CAP rows by hour_ts (natural zero/nonzero ratio, closest to validation period). Total grid: 1,371,536 rows; currently using 300k (1,071,536 remaining).
+## Decisions
+- Zero-demand rows are explicit in training (cross-product of stations × hours, unobserved = 0)
+- Chronological sampling beats random 50/50 — more realistic distribution, recent data closest to validation
+- More rows helps up to a point: 100k→300k→900k improved MAE but with diminishing returns
+- Regularization (l2_leaf_reg) did not help — gap is distribution shift (Jan→Feb), not model complexity
+- recent_station_hour_mean caused data leakage (lookup included training rows themselves)
+- month feature too weak (only 2 unique values in training window)
+
+## Trend Features — Tried and abandoned
+- **Day-level trend** (OLS slope per city+station+hour+weekday): theory was sound but the signal was too noisy — only 6–7 training weeks, so slopes had high variance. Also had a global vs. per-city `train_end` bug (city 1 got negative weeks_ahead). After fixing the bug, MAE was still 0.768 — worse than the 0.751 baseline. City 2 (most rows, smallest weeks_ahead ≈ 0.14) regressed enough to override city 3's improvement.
+- **Hour-level trend** (adjacent hour baselines): not attempted; dropped the day-level idea first.
 
 ## MAE Results
-
-| Run | N_ROWS_CAP | Sampling | Overall MAE | city 1 | city 2 | city 3 |
-|---|---|---|---|---|---|---|
-| dummy baseline | — | — | 98.91 | — | — | — |
-| v1 | 100k | random 50/50 | 0.764 | 0.981 | 0.626 | 0.365 |
-| v2 | 100k | chronological | 0.776 | 0.975 | 0.651 | 0.334 |
-| **v3 (current)** | **300k** | **chronological** | **0.761** | **0.980** | **0.621** | **0.364** |
-
-## What Didn't Work
-- **Random 300k (50/50)**: same as 100k (0.764). Not a data volume problem with that sampling.
-- **recent_station_hour_mean**: data leakage — lookup included training rows; overfit, MAE → 0.872.
-- **month feature**: only 2 unique values in training; weak signal, MAE → 0.772.
-- **Chronological 100k**: tree saw only 17k nonzero examples (83% zeros), barely contributed (alpha=0.10), MAE → 0.776.
+| Run | N_ROWS_CAP | Overall | city 1 | city 2 | city 3 |
+|---|---|---|---|---|---|
+| dummy baseline | — | 98.91 | — | — | — |
+| random 50/50 | 100k | 0.764 | 0.981 | 0.626 | 0.365 |
+| chronological | 300k | 0.761 | 0.980 | 0.621 | 0.364 |
+| chronological | 900k | **0.751** | 0.978 | 0.607 | 0.347 |
+| trend_pred (global bug→0.773; per-city fix→0.768) | 800k | 0.768 | 0.983 | 0.634 | 0.264 |

@@ -41,9 +41,7 @@ VAL_LABELS  = DATA_ROOT / "private_labels.csv"
 OUTPUT      = Path("weights.joblib")
 
 # ── Cap on tree training rows ─────────────────────────────────────────────────
-# Half will be nonzero-demand rows, half will be zero-demand rows.
-# Bump up to 300_000 or 600_000 once the pipeline looks correct.
-N_ROWS_CAP = 300_000
+N_ROWS_CAP = 900_000
 
 # ── Column groups ─────────────────────────────────────────────────────────────
 STATION_META_COLS = [
@@ -114,9 +112,6 @@ def build_stat_tables(demand_df: pd.DataFrame) -> dict:
     Compute hierarchical mean-demand lookup tables from the full demand grid.
     L1–L6 are stored as plain dicts (tuple keys → float) for O(1) inference.
     L7 is the global mean scalar used as the final fallback.
-
-    The fallback chain is defined by STAT_LEVELS in model.py so training and
-    inference always stay in sync.
     """
     tables = {}
     for level_key, cols in STAT_LEVELS:
@@ -195,7 +190,10 @@ def subsample_for_tree(demand_df: pd.DataFrame, n_cap: int) -> pd.DataFrame:
 
 # ── Validation-set feature engineering (mirrors _engineer_features in model.py) ─
 
-def engineer_val_features(val: pd.DataFrame, stat_tables: dict) -> pd.DataFrame:
+def engineer_val_features(
+    val: pd.DataFrame,
+    stat_tables: dict,
+) -> pd.DataFrame:
     """
     Apply the same transformations as BikeDemandModel._engineer_features
     so predictions on the validation set are comparable.
@@ -310,6 +308,7 @@ def main() -> None:
         iterations=500,
         learning_rate=0.05,
         depth=6,
+        l2_leaf_reg=10,
         loss_function="MAE",
         eval_metric="MAE",
         random_seed=42,
@@ -341,9 +340,9 @@ def main() -> None:
     # ── 10. Save artifacts ───────────────────────────────────────────────────
     artifacts = {
         "model":        model,
-        "stat_tables":  stat_tables,   # L1–L6 dicts + L7 float
+        "stat_tables":  stat_tables,
         "alpha":        best_alpha,
-        "station_meta": station_meta,  # POI / coord lookup for new stations
+        "station_meta": station_meta,
     }
     joblib.dump(artifacts, OUTPUT, compress=3)
     print(f"\nSaved {OUTPUT}  (alpha={best_alpha:.2f})")

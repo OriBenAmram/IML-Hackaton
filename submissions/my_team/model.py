@@ -43,11 +43,6 @@ STAT_LEVELS = [
 # ── Shared helpers (train.py imports these) ───────────────────────────────────
 
 def add_cyclical_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Adds sin/cos encodings for hour (period=24) and weekday (period=7).
-    Returns a copy with four new columns; original df is not mutated.
-    Requires columns: hour (0–23), weekday (0–6).
-    """
     df = df.copy()
     df["hour_sin"]    = np.sin(2 * np.pi * df["hour"]    / 24)
     df["hour_cos"]    = np.cos(2 * np.pi * df["hour"]    / 24)
@@ -67,7 +62,6 @@ def apply_stat_baseline(df: pd.DataFrame, stat_tables: dict) -> np.ndarray:
     global hour+weekday means (L6) or the global mean (L7), so predictions
     degrade gracefully on new cities/stations.
     """
-    # Work with a clean, normalised copy of the key columns
     work = pd.DataFrame({
         "city":             df["city"].astype(str).values,
         "start_station_id": df["start_station_id"].astype(str).values,
@@ -115,7 +109,6 @@ class BikeDemandModel:
     # ── Internal helpers ─────────────────────────────────────────────────────
 
     def _ensure_time_cols(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Derive hour and weekday from a timestamp column if not already present."""
         if "hour" not in df.columns or "weekday" not in df.columns:
             ts_col = "target_hour_start" if "target_hour_start" in df.columns else "hour_ts"
             ts = pd.to_datetime(df[ts_col], errors="coerce")
@@ -125,31 +118,22 @@ class BikeDemandModel:
         return df
 
     def _engineer_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Transform a raw station-hour DataFrame into one containing all ALL_FEAT_COLS.
-        Does not mutate the input.
-        """
         df = self._ensure_time_cols(df)
         df = df.copy()
 
-        # Rename raw calendar columns to our internal names
         df.rename(columns={
             "weekend":     "is_weekend",
             "holiday":     "is_holiday",
             "working_day": "is_working_day",
         }, inplace=True)
 
-        # Cyclical time encodings
         df = add_cyclical_features(df)
 
-        # Normalise categorical IDs to strings (CatBoost expects consistent types)
         df["city"]             = df["city"].astype(str)
         df["start_station_id"] = df["start_station_id"].astype(str)
 
-        # Statistical baseline as a numeric feature
         df["stat_baseline_pred"] = apply_stat_baseline(df, self.stat_tables)
 
-        # Ensure all numeric feature columns are present (fill NaN if missing)
         for col in NUMERIC_FEAT_COLS:
             if col not in df.columns:
                 df[col] = np.nan
