@@ -317,7 +317,7 @@ def main() -> None:
     # Alpha always tuned to 1.0 (pure tree) on local validation; hardcoded here
     # so train.py has no dependency on hidden validation files.
     best_alpha = 1.0
-    print("\n[8] Alpha fixed to 1.00 (pure tree — stat baseline not used at inference)")
+    print("\n[8] Alpha fixed to 1.00 (pure tree - stat baseline not used at inference)")
 
     # ── 10. Save artifacts ───────────────────────────────────────────────────
     artifacts = {
