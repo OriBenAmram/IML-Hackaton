@@ -1,0 +1,23 @@
+Ori Ben Amram,Ofek Farkash,Omer Sasson,Ezra Kaplan
+207401290,206626145,209758283,
+
+## Model
+
+**Architecture:** CatBoostRegressor blended with a hierarchical statistical baseline via final = alpha * tree + (1-alpha) * stat_baseline. Alpha is tuned on the local validation set. in practice it converged to 1.0 (pure tree).
+
+**Statistical baseline:** 7 level fallback lookup — most specific (city+station+hour+weekday) down to global mean. Used as both a fallback predictor and a direct tree feature (stat_baseline_pred), giving the tree an anchor around the per slot historical mean.
+
+**Features:** cyclical sin/cos encodings for hour (period 24) and weekday (period 7). calendar flags (weekend, holiday, working day). Station location (lat/lng). weather (temperature, precipitation, wind, cloud cover, etc.). station infrastructure POIs (bike lanes, parks, universities, offices, transit stops). And stat_baseline_pred.
+
+**Training data:** full station-hour demand grid (cross-product of each station with every observed hour in its city). Zero-demand rows are explicit (unobserved = 0). We train on the most recent 900k rows by timestamp — chronological sampling keeps the training distribution closest to the validation period.
+
+**CatBoost settings:** 500 iterations, learning rate 0.05, depth 6, l2_leaf_reg 10, city and start_station_id as native categorical features.
+
+## Reproducing
+
+```
+cd submissions/my_team
+python train.py
+```
+
+Reads `../../dataset/local_train_set.csv`, writes `weights.joblib`. Runtime ~5 minutes.

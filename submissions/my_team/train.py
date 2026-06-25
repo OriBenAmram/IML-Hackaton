@@ -6,7 +6,7 @@ Run from this folder:
     cd submissions/my_team
     python train.py
 
-Reads:  ../../dataset/local_train_set.csv
+Reads:  ../../dataset/train_set.csv
 Writes: weights.joblib
 
 Bump N_ROWS_CAP to scale up the tree training set:
@@ -35,9 +35,7 @@ from model import (
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 DATA_ROOT   = Path("../../dataset")
-TRAIN_CSV   = DATA_ROOT / "local_train_set.csv"
-VAL_TARGETS = DATA_ROOT / "public_validation_targets.csv"
-VAL_LABELS  = DATA_ROOT / "private_labels.csv"
+TRAIN_CSV   = DATA_ROOT / "train_set.csv"
 OUTPUT      = Path("weights.joblib")
 
 # ── Cap on tree training rows ─────────────────────────────────────────────────
@@ -316,26 +314,10 @@ def main() -> None:
     )
     model.fit(train_pool)
 
-    # ── 9. Tune blend weight alpha on the local validation set ───────────────────
-    print("\n[8] Tuning blend weight alpha on local validation set...")
-    val_targets = pd.read_csv(VAL_TARGETS, low_memory=False)
-    val_labels  = pd.read_csv(VAL_LABELS,  low_memory=False)
-    val = val_targets.merge(val_labels[["id", "demand"]], on="id", how="left")
-    y_val = val["demand"].values.astype(float)
-
-    val_feats = engineer_val_features(val, stat_tables)
-
-    val_pool        = Pool(data=val_feats[ALL_FEAT_COLS], cat_features=CAT_FEAT_COLS)
-    tree_preds_val  = model.predict(val_pool)
-    stat_preds_val  = val_feats["stat_baseline_pred"].values
-
-    mae_stat = float(np.mean(np.abs(np.clip(stat_preds_val, 0, None) - y_val)))
-    mae_tree = float(np.mean(np.abs(np.clip(tree_preds_val, 0, None) - y_val)))
-    print(f"    alpha=0.00  (stat baseline only):  MAE = {mae_stat:.4f}")
-    print(f"    alpha=1.00  (tree only):            MAE = {mae_tree:.4f}")
-
-    best_alpha, best_mae = tune_alpha(tree_preds_val, stat_preds_val, y_val)
-    print(f"    alpha={best_alpha:.2f}  (best blend):           MAE = {best_mae:.4f}")
+    # Alpha always tuned to 1.0 (pure tree) on local validation; hardcoded here
+    # so train.py has no dependency on hidden validation files.
+    best_alpha = 1.0
+    print("\n[8] Alpha fixed to 1.00 (pure tree — stat baseline not used at inference)")
 
     # ── 10. Save artifacts ───────────────────────────────────────────────────
     artifacts = {
