@@ -41,7 +41,7 @@ VAL_LABELS  = DATA_ROOT / "private_labels.csv"
 OUTPUT      = Path("weights.joblib")
 
 # ── Cap on tree training rows ─────────────────────────────────────────────────
-N_ROWS_CAP = 900_000
+N_ROWS_CAP = 2_000_000  # larger than full grid → uses all rows
 
 # ── Column groups ─────────────────────────────────────────────────────────────
 STATION_META_COLS = [
